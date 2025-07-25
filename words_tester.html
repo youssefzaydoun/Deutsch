@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>German-Arabic Quiz</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>* {
+        box-sizing: border-box;
+    }
+    .home{padding: 10px 15px;
+    margin: 5px;
+    font-size: 16px;
+    cursor: pointer;
+    border: none;
+    border-radius: 4px;
+    background-color: #007bff;
+    color: #ffffff;
+    transition: background-color 0.3s ease;
+        text-decoration: none;
+}
+    body {
+        font-family: Arial, sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        background-color: #f0f2f5;
+    }
+    
+    .container {
+        text-align: center;
+        padding: 20px;
+        max-width: 400px;
+        width: 90%;
+        border-radius: 8px;
+        background-color: #ffffff;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    
+    h1 {
+        color: #333;
+    }
+    
+    input[type="file"] {
+        margin-bottom: 20px;
+        padding: 8px;
+        font-size: 16px;
+        cursor: pointer;
+    }
+    
+    #quiz-container {
+        margin-top: 20px;
+    }
+    
+    input[type="text"] {
+        width: 100%;
+        padding: 10px;
+        margin: 10px 0;
+        font-size: 16px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        transition: border-color 0.3s ease;
+    }
+    
+    input[type="text"]:focus {
+        outline: none;
+        border-color: #007bff;
+    }
+    
+    button {
+        padding: 10px 15px;
+        margin: 5px;
+        font-size: 16px;
+        cursor: pointer;
+        border: none;
+        border-radius: 4px;
+        background-color: #007bff;
+        color: #ffffff;
+        transition: background-color 0.3s ease;
+    }
+    
+    button:hover {
+        background-color: #0056b3;
+    }
+    
+    #feedback {
+        margin-top: 10px;
+        font-weight: bold;
+        color: #333;
+    }
+    
+    #score {
+        font-size: 18px;
+        font-weight: bold;
+        color: #333;
+    }
+    
+    #results-container h2 {
+        color: #333;
+        margin-top: 20px;
+    }
+    
+    #incorrect-answers {
+        list-style-type: none;
+        padding: 0;
+        text-align: left;
+    }</style>
+</head>
+<body>
+    <div class="container">
+        <h1>German-Arabic Vocabulary Quiz</h1>
+        
+        <input type="file" id="fileUpload" accept=".xlsx" />
+        <select id="quizMode">
+            <option value="typing">Arabic to German (Typing)</option>
+            <option value="multipleChoice">German to Arabic (Multiple Choice)</option>
+        </select>
+        <a href="home.html" class="home">home</a>
+        
+        <div id="quiz-container" style="display: none;">
+            <p id="question"></p>
+            <input type="text" id="answer" placeholder="Type the German word" onkeypress="handleKeyPress(event)">
+            <div id="choices" style="display: none;">
+                <button onclick="checkAnswer(0)" id="choice1"></button>
+                <button onclick="checkAnswer(1)" id="choice2"></button>
+                <button onclick="checkAnswer(2)" id="choice3"></button>
+            </div>
+            <button onclick="retryQuiz()">Retry</button>
+            <p id="feedback"></p>
+        </div>
+        
+        <p id="score"></p>
+        <div id="results-container" style="display: none;">
+            <h2>Quiz Summary</h2>
+            <ul id="incorrect-answers"></ul>
+            <button onclick="retryQuiz()">Retry Quiz</button>
+            <a href="words_tester.html" class="home">select another sheet</a>
+        </div>
+    </div>
+
+    <script >let words = [];
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let incorrectAnswers = [];
+        let quizMode = 'typing';  // default mode
+        
+        // Load and parse the Excel file
+        document.getElementById('fileUpload').addEventListener('change', handleFile, false);
+        document.getElementById('quizMode').addEventListener('change', function () {
+            quizMode = this.value;
+        });
+        
+        
+        function handleFile(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+        
+                // Filter out rows that are undefined or do not have both German and Arabic values
+                words = jsonData.slice(1)
+                    .filter(row => row[0] && row[1])  // Ensure both German and Arabic are present
+                    .map(row => ({ german: row[0], arabic: row[1] }));
+        
+                shuffle(words);
+        
+                document.getElementById('fileUpload').style.display = 'none';
+                document.getElementById('quiz-container').style.display = 'block';
+                showQuestion();
+            };
+            reader.readAsArrayBuffer(file);
+        }
+        
+        
+        // Shuffle function to randomize questions
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+        
+        // Show the current question based on the quiz mode
+        function showQuestion() {
+            document.getElementById('feedback').textContent = '';
+            if (currentQuestionIndex < words.length) {
+                if (quizMode === 'typing') {
+                    showTypingQuestion();
+                } else {
+                    showMultipleChoiceQuestion();
+                }
+            } else {
+                showResults();
+            }
+        }
+        
+        // Show typing question (Arabic to German)
+        function showTypingQuestion() {
+            document.getElementById('question').textContent = `${currentQuestionIndex+1} / ${words.length}: ${words[currentQuestionIndex].arabic}`;
+            document.getElementById('answer').style.display = 'inline';
+            document.getElementById('choices').style.display = 'none';
+        }
+        
+        // Show multiple-choice question (German to Arabic)
+        function showMultipleChoiceQuestion() {
+            document.getElementById('question').textContent = `${currentQuestionIndex+1} / ${words.length}: ${words[currentQuestionIndex].german}`;
+            document.getElementById('answer').style.display = 'none';
+            document.getElementById('choices').style.display = 'block';
+        
+            const correctAnswer = words[currentQuestionIndex].arabic;
+            let options = [correctAnswer];
+        
+            // Select 2 random incorrect answers
+            while (options.length < 3) {
+                const randomWord = words[Math.floor(Math.random() * words.length)].arabic;
+                if (!options.includes(randomWord)) options.push(randomWord);
+            }
+            shuffle(options);
+        
+            // Assign options to buttons
+            document.getElementById('choice1').textContent = options[0];
+            document.getElementById('choice2').textContent = options[1];
+            document.getElementById('choice3').textContent = options[2];
+        
+            document.getElementById('choice1').setAttribute("data-answer", options[0] === correctAnswer);
+            document.getElementById('choice2').setAttribute("data-answer", options[1] === correctAnswer);
+            document.getElementById('choice3').setAttribute("data-answer", options[2] === correctAnswer);
+        }
+        
+        // Check the user's answer
+        function checkAnswer(selectedIndex) {
+            const userAnswer = quizMode === 'typing' 
+                ? document.getElementById('answer').value.trim() 
+                : document.querySelector(`#choice${selectedIndex + 1}`).textContent;
+        
+            const correctAnswer = quizMode === 'typing' 
+                ? words[currentQuestionIndex].german.trim() 
+                : words[currentQuestionIndex].arabic;
+        
+            if (userAnswer.toLowerCase() === correctAnswer.toLowerCase()) {
+                score++;
+                document.getElementById('feedback').textContent = 'Correct!';
+                document.getElementById('feedback').style.color = 'green';
+            } else {
+                document.getElementById('feedback').textContent = `Incorrect. The correct answer is: ${correctAnswer}`;
+                document.getElementById('feedback').style.color = 'red';
+                incorrectAnswers.push({
+                    german: words[currentQuestionIndex].german,
+                    arabic: words[currentQuestionIndex].arabic,
+                    userAnswer: userAnswer
+                });
+            }
+            document.getElementById('answer').value='';
+            currentQuestionIndex++;
+            setTimeout(showQuestion, 500);
+        }
+        
+        // Show results at the end of the quiz
+        function showResults() {
+            document.getElementById('quiz-container').style.display = 'none';
+            document.getElementById('score').textContent = `Quiz completed! Your score: ${score} / ${words.length}`;
+            document.getElementById('results-container').style.display = 'block';
+        
+            const incorrectList = document.getElementById('incorrect-answers');
+            incorrectList.innerHTML = '';
+            incorrectAnswers.forEach(item => {
+                const listItem = document.createElement('li');
+                listItem.textContent = `German: ${item.german}, Your answer: ${item.userAnswer}, Correct: ${item.arabic}`;
+                incorrectList.appendChild(listItem);
+            });
+        }
+        
+        // Handle Enter key to submit answer
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                checkAnswer();
+        
+            }
+        }
+        
+        // Retry quiz
+        function retryQuiz() {
+            currentQuestionIndex = 0;
+            score = 0;
+            incorrectAnswers = [];
+            shuffle(words);
+        
+            document.getElementById('results-container').style.display = 'none';
+            document.getElementById('score').textContent = '';
+            document.getElementById('quiz-container').style.display = 'block';
+        
+            showQuestion();
+        }</script>
+</body>
+</html>

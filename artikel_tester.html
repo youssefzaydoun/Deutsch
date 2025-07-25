@@ -1,0 +1,356 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>German Words Quiz</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            text-align: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            font-size: 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        input {
+            padding: 8px;
+            width: 80%;
+            font-size: 16px;
+            margin-top: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .result {
+            margin-top: 20px;
+            font-size: 18px;
+            color: green;
+    font-weight: bold;
+        }
+        .summary {
+            text-align: left;
+            margin-top: 30px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+        .preset-form {
+            margin-top: 20px;
+            text-align: left;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+        .preset-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        .preset-list li {
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 style="margin: 29px 0">German Words Quiz</h2>
+        <div class="preset-form" id="presetForm">
+            <h3>Manage Presets:</h3>
+            <label for="presetName">Preset Name:</label>
+            <input type="text" id="presetName">
+            <button onclick="savePreset()">Save Preset</button>
+            <br><br>
+            <label for="presetSelect">Load Preset:</label>
+            <select id="presetSelect" multiple>
+                <!-- Options will be populated dynamically -->
+            </select>
+            <button onclick="loadPreset()">Load Preset</button>
+            <button onclick="deletePreset()">Delete Preset</button>
+        </div>
+        <div id="quiz">
+            <input type="text" id="derInput" placeholder="Enter 'der' words (separate with spaces)">
+            <input type="text" id="dasInput" placeholder="Enter 'das' words (separate with spaces)">
+            <input type="text" id="dieInput" placeholder="Enter 'die' words (separate with spaces)">
+            <button onclick="startQuiz()">Start Quiz</button>
+        </div>
+        <div id="quizArea" style="display: none;">
+            <h3>Quiz:</h3>
+            <div id="quizResult" style="font-size: 16px;" class="result"></div>
+            <div id="questionCounter" style="margin: 10px 0;"></div>
+            <div id="question" style="font-size: 24px; font-weight: 600; margin: 10px;"></div>
+            <input type="text" id="answer">
+            <button onclick="checkAnswer()">Submit Answer</button>
+            <button onclick="retryQuiz()">Retry Quiz</button>
+        </div>
+        <div id="summaryArea" style="display: none;">
+            <h3>Quiz Summary:</h3>
+            <div id="summary" class="summary"></div>
+            <button id="retryButton" onclick="retryQuiz()">Retry Quiz</button>
+            <button id="newQuizButton" onclick="startNewQuiz()">Start New Quiz</button>
+        </div>
+    </div>
+
+    <script>
+        let words = [];
+        let articles = [];
+        let wrongWords = [];
+        let wrongAnswers = [];
+        let correctAnswers = [];
+        let asked = [];
+        let currentQuestionIndex = 0;
+        let numQuestions = 0;
+        let numCorrect = 0;
+        let numWrong = 0;
+        let currentQuestionNumber = 0;
+
+        // Load presets from localStorage or initialize if not present
+        let presets = JSON.parse(localStorage.getItem('presets')) || {
+            preset1: {
+                der: ['Hund', 'Tisch', 'Stuhl'],
+                das: ['Auto', 'Buch', 'Fenster'],
+                die: ['Katze', 'Blume', 'Schule']
+            },
+            preset2: {
+                der: ['Mann', 'Apfel', 'Himmel'],
+                das: ['Kind', 'Pferd', 'Beispiel'],
+                die: ['Frau', 'Uhr', 'Tür']
+            }
+        };
+
+        // Function to combine all presets into the "All" preset
+        function updateAllPreset() {
+            let allPreset = { der: new Set(), das: new Set(), die: new Set() };
+            for (let key in presets) {
+                presets[key].der.forEach(word => allPreset.der.add(word));
+                presets[key].das.forEach(word => allPreset.das.add(word));
+                presets[key].die.forEach(word => allPreset.die.add(word));
+            }
+            presets['All'] = {
+                der: Array.from(allPreset.der),
+                das: Array.from(allPreset.das),
+                die: Array.from(allPreset.die)
+            };
+            localStorage.setItem('presets', JSON.stringify(presets));
+            populatePresetSelect();
+        }
+
+        // Function to save preset to localStorage
+        function savePreset() {
+            let presetName = document.getElementById('presetName').value.trim();
+            if (presetName === '') {
+                alert('Please enter a preset name.');
+                return;
+            }
+            presets[presetName] = {
+                der: document.getElementById('derInput').value.trim().split(' ').filter(word => word !== ''),
+                das: document.getElementById('dasInput').value.trim().split(' ').filter(word => word !== ''),
+                die: document.getElementById('dieInput').value.trim().split(' ').filter(word => word !== '')
+            };
+            localStorage.setItem('presets', JSON.stringify(presets));
+            updateAllPreset();
+            alert(`Preset '${presetName}' saved successfully.`);
+        }
+
+        // Function to load preset
+        function loadPreset() {
+    let selectedOptions = Array.from(document.getElementById('presetSelect').selectedOptions);
+    let derWords = new Set();
+    let dasWords = new Set();
+    let dieWords = new Set();
+
+    selectedOptions.forEach(option => {
+        let presetName = option.value;
+        presets[presetName].der.forEach(word => derWords.add(word));
+        presets[presetName].das.forEach(word => dasWords.add(word));
+        presets[presetName].die.forEach(word => dieWords.add(word));
+    });
+
+    document.getElementById('derInput').value = Array.from(derWords).join(' ');
+    document.getElementById('dasInput').value = Array.from(dasWords).join(' ');
+    document.getElementById('dieInput').value = Array.from(dieWords).join(' ');
+}
+
+        // Function to delete preset
+        function deletePreset() {
+            let presetName = document.getElementById('presetSelect').value;
+            if (confirm(`Are you sure you want to delete the preset '${presetName}'?`)) {
+                delete presets[presetName];
+                localStorage.setItem('presets', JSON.stringify(presets));
+                updateAllPreset();
+                alert(`Preset '${presetName}' deleted successfully.`);
+            }
+        }
+
+        // Function to populate preset select options
+        function populatePresetSelect() {
+            let presetSelect = document.getElementById('presetSelect');
+            presetSelect.innerHTML = '';
+            for (let preset in presets) {
+                let option = document.createElement('option');
+                option.value = preset;
+                option.textContent = preset;
+                presetSelect.appendChild(option);
+            }
+        }
+
+        // Initialize preset select options on page load
+        populatePresetSelect();
+
+        function startQuiz() {
+            let derInput = document.getElementById('derInput').value.trim().split(' ').filter(word => word !== '');
+            let dasInput = document.getElementById('dasInput').value.trim().split(' ').filter(word => word !== '');
+            let dieInput = document.getElementById('dieInput').value.trim().split(' ').filter(word => word !== '');
+
+            words = derInput.concat(dasInput, dieInput);
+            articles = Array(derInput.length).fill('der')
+                .concat(Array(dasInput.length).fill('das'))
+                .concat(Array(dieInput.length).fill('die'));
+
+            numQuestions = words.length;
+            asked = Array(numQuestions).fill(false);
+
+            currentQuestionNumber = 0;
+
+            // Hide preset form
+            document.getElementById('presetForm').style.display = 'none';
+
+            // Hide initial quiz setup, show quiz area
+            document.getElementById('quiz').style.display = 'none';
+            document.getElementById('quizArea').style.display = 'block';
+
+            showNextQuestion();
+        }
+
+        function showNextQuestion() {
+            do {
+                currentQuestionIndex = Math.floor(Math.random() * numQuestions);
+            } while (asked[currentQuestionIndex]);
+
+            currentQuestionNumber++;
+            document.getElementById('questionCounter').textContent = `${currentQuestionNumber}/${numQuestions}`;
+            document.getElementById('question').textContent = `${words[currentQuestionIndex]}`;
+            document.getElementById('answer').value = '';
+            document.getElementById('answer').focus();
+            // Clear previous quiz result
+         
+        }
+
+        function checkAnswer() {
+            let answer = document.getElementById('answer').value.trim();
+            if (answer.toLowerCase() === articles[currentQuestionIndex]) {
+                document.getElementById('quizResult').textContent = 'Correct!';
+                document.getElementById('quizResult').style.color = "green";
+
+                console.log("correct");
+                numCorrect++;
+            } else {
+                document.getElementById('quizResult').textContent = 'Wrong!';
+                document.getElementById('quizResult').style.color = "red";
+
+                wrongWords.push(words[currentQuestionIndex]);
+                correctAnswers.push(articles[currentQuestionIndex]);
+                wrongAnswers.push(answer.toLowerCase());
+                numWrong++;
+            }
+            asked[currentQuestionIndex] = true;
+
+            if (numCorrect + numWrong === numQuestions) {
+                showQuizSummary();
+            } else {
+                showNextQuestion();
+            }
+        }
+
+        function showQuizSummary() {
+            document.getElementById('quizArea').style.display = 'none';
+            document.getElementById('quizResult').textContent = '';
+            document.getElementById('summaryArea').style.display = 'block';
+
+            let summaryHTML = `<p>Total Questions: ${numQuestions}</p>`;
+            summaryHTML += `<p>Correct Answers: ${numCorrect}</p>`;
+            summaryHTML += `<p>Wrong Answers: ${numWrong}</p>`;
+
+            if (numWrong > 0) {
+                summaryHTML += '<p>Wrong Words:</p>';
+                summaryHTML += '<ul>';
+                let x = 0;
+                wrongWords.forEach(word => {
+                    summaryHTML += `<li>${word} ( ${wrongAnswers[x]} ){${correctAnswers[x]}} </li>`;
+                    x++;
+                });
+                summaryHTML += '</ul>';
+            }
+
+            document.getElementById('summary').innerHTML = summaryHTML;
+        }
+
+        function retryQuiz() {
+            numCorrect = 0;
+            numWrong = 0;
+            wrongWords = [];
+            wrongAnswers = [];
+            correctAnswers=[];
+            asked = Array(numQuestions).fill(false);
+            currentQuestionNumber = 0;
+
+            showNextQuestion();
+            document.getElementById('summaryArea').style.display = 'none';
+            document.getElementById('quizArea').style.display = 'block';
+        }
+
+        function startNewQuiz() {
+            numCorrect = 0;
+            numWrong = 0;
+            wrongWords = [];
+            wrongAnswers = [];
+            correctAnswers = [];
+            asked = [];
+            document.getElementById('presetForm').style.display = 'block';
+            document.getElementById('derInput').value = '';
+            document.getElementById('dasInput').value = '';
+            document.getElementById('dieInput').value = '';
+
+            document.getElementById('summaryArea').style.display = 'none';
+            document.getElementById('quiz').style.display = 'block';
+        }
+
+        // Add event listener to handle Enter key press
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                let buttons = document.getElementsByTagName('button');
+                for (let i = 0; i < buttons.length; i++) {
+                    if (buttons[i].offsetParent !== null) { // Check if button is visible
+                        buttons[i].click();
+                        break; // Only click the first visible button
+                    }
+                }
+            }
+        });
+
+        // Initialize the "All" preset on page load
+        updateAllPreset();
+    </script>
+</body>
+</html>
